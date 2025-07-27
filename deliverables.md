@@ -11,84 +11,64 @@ The primary data source is the Etherscan API, which provides comprehensive trans
 
 **Process:**
 
-1. **Input:**
-
-   * A list of wallet addresses provided in a CSV file (`data/wallets.csv`).
-
-2. **API Query:**
-
-   * For each wallet, a script queries the Etherscan API’s `txlist` endpoint to fetch its entire transaction history.
-   * Pagination logic ensures retrieval of all transactions in batches of 1,000.
-
-3. **Filtering:**
-
-   * Raw transaction data is filtered to isolate interactions with a predefined list of Compound V2 and V3 smart contract addresses.
-   * Each transaction is tagged with its originating `wallet_address` and inferred `protocol_version` (V2 or V3).
-
-4. **Output:**
-
-   * Filtered transactions are saved to `data/compound_v2_transactions.csv`.
-   * This CSV becomes the input for the wallet risk analysis model.
+1. **Input:** A list of wallet addresses provided in a CSV file (`data/wallets.csv`).
+2. **API Query:** For each wallet, a script queries the Etherscan API’s `txlist` endpoint to fetch its entire transaction history. Pagination logic ensures all transactions are retrieved in batches of 1,000.
+3. **Filtering:** Raw transaction data is filtered to isolate interactions with a predefined list of Compound V2 and V3 smart contract addresses. Each transaction is tagged with its originating `wallet_address` and inferred `protocol_version` (V2 or V3).
+4. **Output:** Filtered transactions are saved to `data/compound_v2_transactions.csv`, serving as the input for the risk analysis model.
 
 **Scalability:**
 
-* The method supports any number of wallets by updating the input CSV.
-* A `time.sleep(0.25)` between API calls respects Etherscan’s rate limits, enabling robust, large-scale execution.
-
----
+* Can process any number of wallets by updating the input CSV.
+* Includes `time.sleep(0.25)` between API calls to respect Etherscan’s rate limits, enabling robust execution over large datasets.
 
 ## 2. Feature Selection Rationale
 
-Initial feature selection transforms raw transaction records into foundational variables that capture financial, technical, and behavioral aspects:
+The feature selection strategy captures a multi-faceted, holistic profile of each wallet from raw on-chain data. Selected features are grouped into logical categories:
 
-* **value**: ETH amount transferred; indicates economic scale.
-* **gas, gasPrice, gasUsed**: technical efficiency and cost; abnormal values hint at bot optimizations or misconfigurations.
-* **timeStamp**: enables temporal analyses—frequency, bursts, and activity spans.
-* **isError / txreceipt\_status**: failure vs. success rates; high error rates can signal probing or unsophistication.
-* **functionName / methodId**: identifies the smart contract methods used; informs complexity and intent.
-* **from, to, wallet\_address**: address fields underpin counterparty network analysis—flow direction and interaction scope.
+* **Financial Indicators (`value`):** Measures transaction amounts to distinguish between high-value (whale) wallets and low-value (spam/testing) wallets. Basis for metrics like `total_value_sent`, `avg_transaction_value`, and `zero_value_ratio`.
+* **Technical & Efficiency Indicators (`gas`, `gasPrice`, `gasUsed`, `isError`):**
 
-Each selected raw column serves as the basis for one or more higher‑level risk indicators.
+  * **Gas Metrics:** High or erratic values signal bot behavior or inefficiency.
+  * **Error Rate:** High failure rates indicate unsophisticated bots, misconfigured contracts, or probing attacks.
+* **Temporal Indicators (`timeStamp`):** Enables calculation of `transaction_frequency`, detection of dormancy and burst patterns, and differentiation between human and programmatic activity.
+* **Interaction & Counterparty Indicators (`from`, `to`, `functionName`):**
 
----
+  * **Flow Analysis:** `from`/`to` fields map fund flows, informing metrics like `unique_recipients` and `send_receive_ratio`.
+  * **Function Analysis:** `functionName` captures interaction complexity, forming the basis for `contract_complexity`.
 
 ## 3. Scoring Method
 
-The scoring pipeline converts wallet‑level features into a final risk score (0–1000) through four stages:
+A multi-stage pipeline transforms raw transaction data into a final risk score (0–1000):
 
-1. **Wallet-Level Feature Engineering**
+1. **Wallet-Level Feature Engineering:** Aggregate transaction data per wallet to compute features like `total_transactions`, `avg_transaction_value`, `error_rate`, `transaction_frequency`, `unique_recipients`, and `contract_complexity`.
 
-   * Aggregate transaction data per wallet to compute metrics like `total_transactions`, `avg_transaction_value`, `error_rate`, `transaction_frequency`, `unique_recipients`, and `contract_complexity`.
-
-2. **Weighted Base Score Calculation**
+2. **Weighted Base Score Calculation:**
 
    * Group features into risk components (Volume, Behavioral, Technical, Temporal, Diversity).
-   * Normalize each feature to a 0–1 range (MinMaxScaler).
-   * Compute each component’s score as the mean of its features, multiplied by a predefined weight.
-   * Sum all component scores to yield the `base_risk_score`, scaled to 0–1000.
+   * Normalize features to 0–1 (MinMaxScaler).
+   * Compute each component’s score (mean of its features × predefined weight).
+   * Sum component scores for `base_risk_score` (scaled to 0–1000).
 
-3. **ML-Powered Score Refinement**
+3. **ML-Powered Score Refinement:**
 
-   * **Isolation Forest:** flags \~5% of wallets as anomalies; these receive a risk boost.
-   * **K-Means Clustering:** groups wallets into behavioral clusters; cluster average risks provide an adjustment factor for each wallet.
+   * **Isolation Forest:** Flags \~5% of wallets as anomalies; flagged wallets receive a risk boost.
+   * **K-Means Clustering:** Groups wallets into behavioral clusters; cluster average risk provides an adjustment factor.
 
-4. **Final Score & Categorization**
+4. **Final Score & Categorization:**
 
-   * Apply anomaly and cluster adjustments to the base score.
+   * Apply anomaly and cluster adjustments.
    * Clip scores to 0–1000 and convert to integers.
-   * Map scores to qualitative categories: Very Low (<200), Low (<400), Medium (<600), High (<800), Very High (≥800).
-
----
+   * Map to qualitative categories: Very Low (<200), Low (<400), Medium (<600), High (<800), Very High (≥800).
 
 ## 4. Justification of the Risk Indicators Used
 
-Each engineered feature tests a specific risk hypothesis, ensuring transparent, defensible scoring:
+Each engineered feature tests a specific risk hypothesis:
 
-* **High `transaction_frequency` & `burst_ratio`:** indicative of scripted or bot activity (front‑running, spam).
-* **High `error_rate`:** suggests unsophisticated operation or probing attacks.
-* **High `recipient_concentration`:** repeated transfers to few addresses can signal structuring or laundering.
-* **High `zero_value_ratio`:** zero‑value transactions often reflect spam, airdrop farming, or testing activity.
-* **Low `contract_complexity`:** limited interaction diversity points to single‑purpose bots; extreme complexity can also warrant scrutiny.
-* **High `send_receive_ratio`:** disproportionate send‑only or receive‑only behavior is a mixer/tumbler pattern.
+* **High `transaction_frequency` & `burst_ratio`:** Indicative of automated or bot activity (front-running, spamming).
+* **High `error_rate`:** Suggests unsophisticated users, misconfigured bots, or probing attacks.
+* **High `recipient_concentration`:** Repeated transfers to few addresses signal structuring or laundering.
+* **High `zero_value_ratio`:** Zero-value transactions often indicate spam, airdrop farming, or testing activities.
+* **Low `contract_complexity`:** Limited function diversity points to simple bots; extreme complexity can also be risky.
+* **High `send_receive_ratio`:** Disproportionate send-only or receive-only behavior can indicate mixer/tumbler services.
 
-This multi‑layered framework combines weighted components with unsupervised refinements, achieving both breadth (via core risk dimensions) and depth (via anomalies/clusters) in a scalable, tunable model.
+This framework combines core risk dimensions with anomaly detection and clustering, ensuring a transparent, scalable, and tunable scoring model.
