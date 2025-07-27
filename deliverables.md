@@ -11,15 +11,31 @@ The primary data source is the Etherscan API, which provides comprehensive trans
 
 **Process:**
 
-1. **Input:** A list of wallet addresses provided in a CSV file (`data/wallets.csv`).
-2. **API Query:** For each wallet, a script queries the Etherscan API’s `txlist` endpoint to fetch its entire transaction history. Pagination logic ensures all transactions are retrieved in batches of 1,000.
-3. **Filtering:** Raw transaction data is filtered to isolate interactions with a predefined list of Compound V2 and V3 smart contract addresses. Each transaction is tagged with its originating `wallet_address` and inferred `protocol_version` (V2 or V3).
-4. **Output:** Filtered transactions are saved to `data/compound_v2_transactions.csv`, serving as the input for the risk analysis model.
+1. **Input:**
+
+   * A list of wallet addresses provided in a CSV file (`data/wallets.csv`).
+
+2. **API Query:**
+
+   * For each wallet, a script queries the Etherscan API’s `txlist` endpoint to fetch its entire transaction history.
+   * Pagination logic ensures retrieval of all transactions in batches of 1,000.
+
+3. **Filtering:**
+
+   * Raw transaction data is filtered to isolate interactions with a predefined list of Compound V2 and V3 smart contract addresses.
+   * Each transaction is tagged with its originating `wallet_address` and inferred `protocol_version` (V2 or V3).
+
+4. **Output:**
+
+   * Filtered transactions are saved to `data/compound_v2_v3_transactions.csv`.
+   * This CSV becomes the input for the wallet risk analysis model.
 
 **Scalability:**
 
-* Can process any number of wallets by updating the input CSV.
-* Includes `time.sleep(0.25)` between API calls to respect Etherscan’s rate limits, enabling robust execution over large datasets.
+* The method supports any number of wallets by updating the input CSV.
+* A `time.sleep(0.25)` between API calls respects Etherscan’s rate limits, enabling robust, large-scale execution.
+
+---
 
 ## 2. Feature Selection Rationale
 
