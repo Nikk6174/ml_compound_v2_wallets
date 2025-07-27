@@ -4,21 +4,20 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables from .env file (for the API key)
+
 load_dotenv()
 
-# --- CONFIGURATION ---
 API_KEY = os.getenv("ETHERSCAN_API_KEY")
 ETHERSCAN_API_URL = "https://api.etherscan.io/v2/api?chainid=1"
-# Define Compound V2 Comptroller address
+
 COMPOUND_V2_COMPTROLLER = "0x3d9819210a31b4961b30ef54be2aed79b9c9cd3b".lower()
-# List of Compound V2 and V3 contract addresses (expand with actual addresses)
+
 COMPOUND_CONTRACTS = [
     COMPOUND_V2_COMPTROLLER,
-    "0x5d3a536e4d6dbd6114cc1ead35777bab948e3643".lower(),  # V2 cETH (example)
-    "0x39aa39c021dfbae8fac545936693ac917d5e7563".lower(),  # V2 cDAI (example)
-    "0xc3d688b66703497daa19211eedff47f25384cdc3".lower(),  # V3 cUSDCv3 Proxy
-    # Add more cToken addresses from Compound V2 markets and other V3 proxies as needed
+    "0x5d3a536e4d6dbd6114cc1ead35777bab948e3643".lower(), 
+    "0x39aa39c021dfbae8fac545936693ac917d5e7563".lower(),  
+    "0xc3d688b66703497daa19211eedff47f25384cdc3".lower(),  
+    
 ]
 INPUT_WALLETS_FILE = "data/wallets.csv"
 OUTPUT_TRANSACTIONS_FILE = "data/compound_v2_v3_transactions.csv"
@@ -78,7 +77,6 @@ def main():
 
     all_compound_transactions = []
 
-    # Loop through each wallet, fetch transactions, and filter for Compound V2/V3
     for i, address in enumerate(wallet_addresses):
         print(f"Processing wallet {i+1}/{len(wallet_addresses)}: {address}")
         
@@ -88,7 +86,7 @@ def main():
             to_address = tx.get("to", "").lower()
             if to_address in COMPOUND_CONTRACTS:
                 tx['wallet_address'] = address
-                tx['protocol_version'] = "V2" if to_address == COMPOUND_V2_COMPTROLLER else "V3"  # Simple heuristic
+                tx['protocol_version'] = "V2" if to_address == COMPOUND_V2_COMPTROLLER else "V3" 
                 all_compound_transactions.append(tx)
 
     if not all_compound_transactions:
